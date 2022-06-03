@@ -1,0 +1,86 @@
+[10:57 am, 03/06/2022] mohit mittal: #include <Wire.h>  
+#include <SPI.h>              // include libraries
+#include <LoRa.h>
+#include <Adafruit_MLX90614.h>  
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+#define ss 10
+#define rst 9
+#define dio0 2
+String outgoing;              // outgoing message
+String message="";
+byte msgCount = 0;            // count of outgoing messages
+byte MasterNode = 0xFF;
+byte localAddress = 0xBB;
+float K2=0;
+float ObjectTemp=0;
+void setup() {
+  Serial.begin(9600);                   // initialize serial
+  mlx.begin();  
+  Serial.print("Emissivity = "); Serial.println(mlx.readEmissivity());
+  Serial.println("================================================");
+  while (!Serial);
+  Serial.println("LoRa Node1");
+  LoRa.setPins(ss, rst, dio0);
+  if (!LoRa.begin(433E6)) {
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
+}
+
+void loop() {
+  //Sensor();
+  ObjectTemp=mlx.readObjectTempC();
+  K2 =ObjectTemp+273;
+  message =String(K2);
+//parse for a packet, and call onReceive with the result:
+  onReceive(LoRa.parsePacket());
+}
+
+void onReceive(int packetSize) {
+  if (packetSize == 0) return ;          // if there's no packet, return
+
+  // read packet header bytes:
+  int recipient = LoRa.read();          // recipient address
+  byte sender = LoRa.read();            // sender address
+  byte incomingMsgId = LoRa.read();     // incoming msg ID
+  byte incomingLength = LoRa.read();    // incoming msg length
+
+  String incoming = LoRa.readString();
+  Serial.print("Message:");
+  Serial.print(incoming);
+  //read poacket 
+  while (LoRa.available()) {
+ Serial.print((char)LoRa.read());
+  }
+// print RSSI of Packet
+ Serial.print("\t\t\t");
+  Serial.print("with RSSI:"); Serial.println(LoRa.packetRssi());
+  int Val = incoming.toInt();
+  if (Val ==0 ||Val==1)
+  {
+    sendMessage(message);
+ // For multi data  send format= String message= String(temperature)+"/" + String(humidity);
+    delay(1000);
+   
+  }
+
+}
+void sendMessage(String outgoing) {
+  //Serial.println(outgoing);
+  LoRa.beginPacket();                   // start packet
+  LoRa.write(MasterNode);              // add destination address
+  LoRa.write(localAddress);             // add sender address
+  LoRa.write(msgCount);                 // add message ID
+  LoRa.write(outgoing.length());        // add payload length
+  LoRa.print(outgoing);                 // add payload
+  LoRa.endPacket();                     // finish packet and send it
+  msgCount++;                           // increment message ID
+ 
+}
+void Sensor()
+{
+  ObjectTemp=mlx.readObjectTempC();
+  K2 =ObjectTemp+273;
+  Serial.println(K2);
+  delay(5000);
+}
